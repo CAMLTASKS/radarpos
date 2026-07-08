@@ -1,10 +1,10 @@
-const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
-const pino = require('pino');
-const qrcode = require('qrcode-terminal');
-const cors = require('cors');
+import express from 'express';
+import http from 'http';
+import { Server } from 'socket.io';
+import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
+import pino from 'pino';
+import qrcode from 'qrcode-terminal';
+import cors from 'cors';
 
 const app = express();
 app.use(cors());
