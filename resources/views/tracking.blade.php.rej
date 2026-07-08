@@ -1,0 +1,20 @@
+--- tracking.blade.php
++++ tracking.blade.php
+@@ -143,15 +143,9 @@
+         socket.on('order-status-changed', (data) => {
+             if (String(data.orderId) === String(orderId) && data.status !== currentStatus) {
+                 currentStatus = data.status;
+-                
+-                // Reproducir sonido de progreso
+-                const pSound = document.getElementById('progressSound');
+-                pSound.currentTime = 0;
+-                pSound.play().catch(e => console.log('Autoplay bloqueado', e));
+-                
+-                updateUI(currentStatus);
++                updateUI(currentStatus, true);
+             }
+         });
+ 
+-        function updateUI(status) {
++        function updateUI(status, playAlert = false) {
+             const textEl = document.getElementById('status-text');

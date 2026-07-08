@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sigue tu Pedido | Sunber</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #F3F4F6; }
+        .progress-bar-fill { transition: width 1s cubic-bezier(0.4, 0, 0.2, 1); }
+    </style>
+</head>
+<body class="h-screen flex flex-col items-center justify-center p-4" id="body">
+    
+    <!-- Background Decor -->
+    <div class="absolute top-0 left-0 w-full h-96 bg-gray-900 -z-10 shadow-xl"></div>
+    <div class="absolute top-0 left-0 w-full h-2 bg-yellow-400 -z-10"></div>
+
+    <div class="bg-white w-full max-w-lg rounded-3xl p-8 shadow-2xl border border-gray-100 relative z-10 transition-all duration-500" id="card">
+        
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-black text-gray-900 tracking-tight mb-1">Tu Pedido #{{ $order->id }}</h1>
+            <p class="text-gray-500 font-bold uppercase tracking-widest text-xs">Hola, {{ $order->customer_name ?: 'Cliente' }}</p>
+        </div>
+
+        <!-- Barra de Progreso Interactiva -->
+        <div class="relative mb-12 mt-6">
+            <div class="overflow-hidden h-2 mb-4 text-xs flex rounded-full bg-gray-100">
+                <div id="progress-bar" style="width: 25%" class="progress-bar-fill shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-yellow-400"></div>
+            </div>
+            
+            <div class="flex justify-between text-xs font-bold text-gray-400 absolute w-full top-4">
+                <div id="step-pending" class="text-yellow-600">Recibido</div>
+                <div id="step-preparing">Preparando</div>
+                <div id="step-on_way" class="hidden">En Camino</div>
+                <div id="step-completed">Entregado</div>
+            </div>
+        </div>
+
+        <div class="bg-gray-50 rounded-2xl p-6 mb-6 border border-gray-100 min-h-[120px] relative overflow-hidden flex flex-col justify-center items-center">
+            
+            <!-- Motorcycle Animation Container -->
+            <div id="moto-container" class="absolute w-full h-full top-0 left-0 pointer-events-none hidden opacity-0 transition-opacity duration-500">
+                <div id="moto-icon" class="absolute top-1/2 -translate-y-1/2 text-4xl transform -scale-x-100 transition-all duration-[3000ms] ease-in-out" style="left: -50px;">
+                    🛵
+                    <div class="absolute -bottom-2 -right-4 flex space-x-1">
+                        <div class="w-2 h-2 bg-gray-300 rounded-full animate-ping"></div>
+                        <div class="w-1.5 h-1.5 bg-gray-200 rounded-full animate-ping" style="animation-delay: 150ms;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <p class="text-gray-800 font-black text-xl text-center relative z-10" id="status-text">
+                ¡Recibimos tu pedido y lo estamos procesando! 🚀
+            </p>
+        </div>
+
+        <!-- Detalles de la compra -->
+        <div class="border-t border-gray-100 pt-6">
+            <p class="text-sm font-bold text-gray-500 uppercase tracking-widest mb-4">Resumen de tu orden</p>
+            <div class="space-y-3 mb-4 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                @foreach($order->items as $item)
+                <div class="flex justify-between items-start text-sm">
+                    <span class="font-bold text-gray-800">{{ $item->quantity }}x {{ $item->product->name }}</span>
+                    <span class="font-bold text-gray-900">${{ number_format($item->price * $item->quantity, 0) }}</span>
+                </div>
+                @endforeach
+            </div>
+            
+            @if($order->delivery_type === 'delivery')
+            <div class="flex justify-between items-start text-sm text-gray-500 mb-2">
+                <span class="font-bold">Domicilio</span>
+                <span class="font-bold">${{ number_format($order->delivery_fee, 0) }}</span>
+            </div>
+            @endif
+
+            <div class="flex justify-between text-xl font-black text-gray-900 pt-4 border-t border-gray-100">
+                <span>TOTAL</span>
+                <span class="text-yellow-500">${{ number_format($order->total, 0) }}</span>
+            </div>
+        </div>
+        
+        <!-- Feedback Section (Hidden by default) -->
+        <div id="feedback-section" class="hidden mt-6 pt-6 border-t border-gray-100">
+            <h3 class="text-center font-black text-gray-800 text-lg mb-3">¿Qué tal estuvo tu pedido?</h3>
+            <div class="flex justify-center gap-2 mb-4">
+                <button onclick="setRating(1)" class="text-4xl text-gray-300 hover:scale-110 transition" id="star-1">★</button>
+                <button onclick="setRating(2)" class="text-4xl text-gray-300 hover:scale-110 transition" id="star-2">★</button>
+                <button onclick="setRating(3)" class="text-4xl text-gray-300 hover:scale-110 transition" id="star-3">★</button>
+                <button onclick="setRating(4)" class="text-4xl text-gray-300 hover:scale-110 transition" id="star-4">★</button>
+                <button onclick="setRating(5)" class="text-4xl text-gray-300 hover:scale-110 transition" id="star-5">★</button>
+            </div>
+            <textarea id="feedback-comments" rows="2" class="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-yellow-400 mb-3 font-bold text-gray-700" placeholder="Déjanos tus comentarios (opcional)..."></textarea>
+            <button id="feedback-btn" onclick="submitFeedback()" class="w-full bg-yellow-400 hover:bg-yellow-500 text-gray-900 font-black py-3 rounded-xl transition shadow-md">
+                Enviar Calificación
+            </button>
+        </div>
+        
+    </div>
+
+    <!-- Audio -->
+    <audio id="readySound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        const orderId = {{ $order->id }};
+        const deliveryType = '{{ $order->delivery_type }}';
+        let currentStatus = '{{ $order->status }}';
+        
+        // Habilitar audio con primer click
+        document.body.addEventListener('click', () => {
+            document.getElementById('readySound').load();
+        }, { once: true });
+
+        // Ajustar visual de los pasos si es domicilio
+        if (deliveryType === 'delivery') {
+            document.getElementById('step-on_way').classList.remove('hidden');
+        }
+
+        const socket = io();
+
+        socket.on('connect', () => {
+            console.log('Conectado al localizador virtual');
+            socket.emit('join-order', orderId);
+            updateUI(currentStatus);
+        });
+
+        socket.on('order-status-changed', (data) => {
+            if (String(data.orderId) === String(orderId) && data.status !== currentStatus) {
+                currentStatus = data.status;
+                updateUI(currentStatus);
+            }
+        });
+
+        function updateUI(status) {
+            const textEl = document.getElementById('status-text');
+            const bar = document.getElementById('progress-bar');
+            const sound = document.getElementById('readySound');
+            const motoContainer = document.getElementById('moto-container');
+            const motoIcon = document.getElementById('moto-icon');
+            
+            // Reset colors
+            document.getElementById('step-preparing').classList.remove('text-yellow-600');
+            document.getElementById('step-on_way').classList.remove('text-yellow-600');
+            document.getElementById('step-completed').classList.remove('text-yellow-600');
+            
+            motoContainer.classList.add('hidden', 'opacity-0');
+            motoIcon.style.left = '-50px';
+
+            if (status === 'pending') {
+                bar.style.width = '25%';
+                textEl.innerText = '¡Recibimos tu pedido y lo estamos procesando! 🚀';
+            } else if (status === 'preparing') {
+                bar.style.width = deliveryType === 'delivery' ? '50%' : '50%';
+                document.getElementById('step-preparing').classList.add('text-yellow-600');
+                textEl.innerText = 'Tu pedido está en preparación en cocina 👨‍🍳';
+            } else if (status === 'ready' && deliveryType === 'local') {
+                bar.style.width = '100%';
+                document.getElementById('step-completed').classList.add('text-yellow-600');
+                textEl.innerText = '¡Tu pedido está listo en la barra! 🍨';
+                fireNotification('¡Tu orden está lista!', 'Acércate a la barra a recogerla.');
+            } else if (status === 'on_way') {
+                bar.style.width = '75%';
+                document.getElementById('step-on_way').classList.add('text-yellow-600');
+                textEl.innerText = 'El domiciliario va en camino con tu pedido';
+                
+                // Animate Moto
+                motoContainer.classList.remove('hidden');
+                setTimeout(() => {
+                    motoContainer.classList.remove('opacity-0');
+                    motoIcon.style.left = '80%';
+                }, 100);
+            } else if (status === 'completed') {
+                bar.style.width = '100%';
+                document.getElementById('step-completed').classList.add('text-yellow-600');
+                textEl.innerText = '¡Pedido entregado! Gracias por elegir Sunber. 😋';
+                bar.classList.replace('bg-yellow-400', 'bg-green-500');
+                document.getElementById('step-completed').classList.replace('text-yellow-600', 'text-green-500');
+                sound.pause();
+                Swal.close();
+            } else if (status === 'cancelled') {
+                bar.style.width = '100%';
+                bar.classList.replace('bg-yellow-400', 'bg-red-500');
+                textEl.innerText = 'Tu pedido ha sido cancelado. Contacta a soporte.';
+            }
+
+            if (status === 'ready' || status === 'completed') {
+                document.getElementById('feedback-section').classList.remove('hidden');
+            }
+        }
+
+        let currentRating = 0;
+        function setRating(stars) {
+            currentRating = stars;
+            for(let i=1; i<=5; i++) {
+                const starEl = document.getElementById('star-'+i);
+                if(i <= stars) {
+                    starEl.classList.remove('text-gray-300');
+                    starEl.classList.add('text-yellow-400');
+                } else {
+                    starEl.classList.remove('text-yellow-400');
+                    starEl.classList.add('text-gray-300');
+                }
+            }
+        }
+
+        function submitFeedback() {
+            if(currentRating === 0) {
+                Swal.fire('Oops', 'Por favor selecciona al menos una estrella.', 'warning');
+                return;
+            }
+            const comments = document.getElementById('feedback-comments').value;
+            const btn = document.getElementById('feedback-btn');
+            btn.innerText = 'Enviando...';
+            btn.disabled = true;
+
+            fetch(`/api/orders/${orderId}/feedback`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}' // Although not auth protected, Laravel might want CSRF if web middleware
+                },
+                body: JSON.stringify({
+                    rating: currentRating,
+                    feedback_comments: comments
+                })
+            }).then(res => res.json())
+              .then(data => {
+                  Swal.fire('¡Gracias!', 'Tu calificación nos ayuda a mejorar.', 'success');
+                  document.getElementById('feedback-section').innerHTML = '<p class="text-green-600 font-bold text-center">¡Gracias por tu feedback! 💛</p>';
+              }).catch(err => {
+                  btn.innerText = 'Enviar Calificación';
+                  btn.disabled = false;
+              });
+        }
+
+        function fireNotification(title, text) {
+            const sound = document.getElementById('readySound');
+            if (navigator.vibrate) navigator.vibrate([500, 200, 500]);
+            sound.loop = true;
+            sound.play().catch(e => console.log('Bloqueado por autoplay'));
+
+            Swal.fire({
+                title: title,
+                text: text,
+                icon: 'success',
+                confirmButtonText: '¡Entendido!',
+                confirmButtonColor: '#FBBF24',
+                backdrop: `rgba(17,24,39,0.8)`,
+                allowOutsideClick: false
+            }).then(() => {
+                sound.pause();
+                sound.currentTime = 0;
+            });
+        }
+    </script>
+</body>
+</html>
